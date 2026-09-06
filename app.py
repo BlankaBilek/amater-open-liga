@@ -1,8 +1,7 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
-import urllib.parse
 from datetime import datetime
+import httpx
 
 st.set_page_config(page_title="Amatér Open Liga", page_icon="🎾", layout="wide")
 
@@ -34,7 +33,15 @@ def supabase_query(table, method="GET", json_data=None, params=None):
                 response = client.patch(url, headers=headers, json=json_data, params=params)
             elif method == "DELETE":
                 response = client.delete(url, headers=headers, params=params)
-            return response.json() if response.status_code in [200, 201] else []
+            
+            # OPRAVA: Správná kontrola úspěšných HTTP kódů (200 OK, 201 Created)
+            if response.status_code in [200, 201]:
+                data = response.json()
+                # Pokud se vrátí jeden slovník místo seznamu, zabalíme ho do seznamu
+                if isinstance(data, dict):
+                    return [data]
+                return data
+            return []
     except Exception:
         return []
 
@@ -43,23 +50,24 @@ ligy_data = supabase_query("ligy")
 vsechny_ligy = {}
 dnes = datetime.now().date()
 
-for l in ligy_data:
-    l_id = l.get("id")
-    nazev = l.get("nazev")
-    od_d = l.get("od_datum")
-    do_d = l.get("do_datum")
-    
-    stav = "[AKTIVNÍ]"
-    if od_d and do_d:
-        try:
-            d_od = datetime.strptime(od_d, "%d.%m.%Y").date()
-            d_do = datetime.strptime(do_d, "%d.%m.%Y").date()
-            if dnes < d_od: stav = "[NEZAČALA]"
-            elif dnes > d_do: stav = "[UKONČENÁ]"
-        except ValueError:
-            pass
-    zobrazeny_nazev = f"{nazev} {stav}"
-    vsechny_ligy[zobrazeny_nazev] = {"id": l_id, "nazev_puvodni": nazev, "stav": stav}
+if ligy_data and isinstance(ligy_data, list):
+    for l in ligy_data:
+        l_id = l.get("id")
+        nazev = l.get("nazev")
+        od_d = l.get("od_datum")
+        do_d = l.get("do_datum")
+        
+        stav = "[AKTIVNÍ]"
+        if od_d and do_d:
+            try:
+                d_od = datetime.strptime(od_d, "%d.%m.%Y").date()
+                d_do = datetime.strptime(do_d, "%d.%m.%Y").date()
+                if dnes < d_od: stav = "[NEZAČALA]"
+                elif dnes > d_do: stav = "[UKONČENÁ]"
+            except ValueError:
+                pass
+        zobrazeny_nazev = f"{nazev} {stav}"
+        vsechny_ligy[zobrazeny_nazev] = {"id": l_id, "nazev_puvodni": nazev, "stav": stav}
 
 # --- NAVIGACE A VÝBĚR LIGY ---
 st.sidebar.title("🎾 Nastavení ligy")
@@ -81,14 +89,14 @@ volba = st.sidebar.radio("Kam chcete jít:", ["📊 Žebříček ligy", "📝 Za
 st.title("🏆 Amatér Open Liga")
 st.subheader(f"Soutěž: {zvolena_liga_nazev} {liga_stav}")
 
-if liga_id is None:
-    st.warning("V systému není žádná aktivní liga. Přejděte do Administrace.")
+if liga_id is None and volba != "⚙️ Administrace":
+    st.warning("V systému není žádná aktivní liga. Přejděte do Administrace a založte ji.")
 else:
     # --- 1. ŽEBŘÍČEK ---
     if volba == "📊 Žebříček ligy":
         st.header("Aktuální pořadí hráčů")
         hraci_data = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "body.desc"})
-        if hraci_data:
+        if hraci_data and isinstance(hraci_data, list) and len(hraci_data) > 0:
             df_hraci = pd.DataFrame(hraci_data)[["jmeno", "body"]]
             df_hraci.columns = ["Hráč", "Body"]
             df_hraci.index = df_hraci.index + 1
@@ -98,7 +106,7 @@ else:
         
         st.subheader("Historie odehraných zápasů")
         zapasy_data = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
-        if zapasy_data:
+        if zapasy_data and isinstance(zapasy_data, list) and len(zapasy_data) > 0:
             df_zapasy = pd.DataFrame(zapasy_data)[["id", "datum", "vitez1", "vitez2", "porazeny1", "porazeny2", "vysledek", "body_za_zapas"]]
             df_zapasy.columns = ["ID", "Datum", "Vítěz 1", "Vítěz 2", "Poražený 1", "Poražený 2", "Výsledek", "Body za zápas"]
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
@@ -113,7 +121,7 @@ else:
             st.warning("⏳ Tato liga ještě nezačala. Zápis výsledků bude povolen až po oficiálním datu zahájení.")
         else:
             hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "jmeno.asc"})
-            seznam_hracu = [h["jmeno"] for h in hraci_list]
+            seznam_hracu = [h["jmeno"] for h in hraci_list] if hraci_list else []
             
             if len(seznam_hracu) < 4:
                 st.warning("Musíte mít alespoň 4 hráče pro zápis deblu.")
@@ -165,8 +173,8 @@ else:
     elif volba == "📜 Pravidla ligy":
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
         l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-        if l_info and len(l_info) > 0:
-            liga_item = l_info[0]
+        if l_info:
+            liga_item = l_info[0] if isinstance(l_info, list) else l_info
             pravidla_text = liga_item.get("pravidla")
             od_d = liga_item.get("od_datum")
             do_d = liga_item.get("do_datum")
@@ -192,20 +200,33 @@ if volba == "⚙️ Administrace":
             if nova_liga_nazev.strip() != "":
                 str_od = nova_od.strftime('%d.%m.%Y')
                 str_do = nova_do.strftime('%d.%m.%Y')
-                novaliga = {"nazev": nova_liga_nazev.strip(), "pravidla": "Zde doplňte pravidla.", "od_datum": str_od, "do_datum": str_do}
+                novaliga = {"nazev": nova_liga_nazev.strip(), "pravidla": "Zde doplňte pravidla této ligy.", "od_datum": str_od, "do_datum": str_do}
                 supabase_query("ligy", method="POST", json_data=novaliga)
-                st.success("Liga vytvořena!")
+                st.success(f"Liga '{nova_liga_nazev}' byla úspěšně vytvořena!")
                 st.rerun()
 
         if liga_id is not None:
             st.markdown("---")
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
             l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-            p_text = l_curr[0].get("pravidla") if l_curr else ""
-            novy_text_pravidel = st.text_area("Text pravidel ligy", p_text, height=200)
+            l_curr_item = l_curr[0] if isinstance(l_curr, list) and l_curr else l_curr
+            p_text = l_curr_item.get("pravidla") if l_curr_item else ""
+            p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
+            p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
+            
+            p_od = datetime.strptime(p_od_str, "%d.%m.%Y").date() if p_od_str else datetime.now().date()
+            p_do = datetime.strptime(p_do_str, "%d.%m.%Y").date() if p_do_str else datetime.now().date()
+            
+            c_u1, c_u2 = st.columns(2)
+            with c_u1: u_od = st.date_input("Změnit datum zahájení", p_od)
+            with c_u2: u_do = st.date_input("Změnit datum ukončení", p_do)
+                
+            novy_text_pravidel = st.text_area("Text pravidel ligy (můžete používat i formátování)", p_text, height=200)
             if st.button("Uložit změny ligy"):
-                supabase_query("ligy", method="PATCH", json_data={"pravidla": novy_text_pravidel}, params={"id": f"eq.{liga_id}"})
-                st.success("Uloženo!")
+                str_u_od = u_od.strftime('%d.%m.%Y')
+                str_u_do = u_do.strftime('%d.%m.%Y')
+                supabase_query("ligy", method="PATCH", json_data={"pravidla": novy_text_pravidel, "od_datum": str_u_od, "do_datum": str_u_do}, params={"id": f"eq.{liga_id}"})
+                st.success("Změny ligy byly úspěšně uloženy!")
                 st.rerun()
 
             st.markdown("---")
@@ -214,7 +235,7 @@ if volba == "⚙️ Administrace":
             if st.button("Zaregistrovat hráče"):
                 if nove_jmeno.strip() != "":
                     supabase_query("hraci", method="POST", json_data={"liga_id": liga_id, "jmeno": nove_jmeno.strip(), "body": 1.0})
-                    st.success("Hráč přidán!")
+                    st.success("Hráč úspěšně přidán do ligy!")
                     st.rerun()
 
             st.markdown("---")
@@ -225,14 +246,16 @@ if volba == "⚙️ Administrace":
                 if st.button("Definitivně smazat hráče"):
                     h_obj = next(h for h in hraci_del if h["jmeno"] == hrac_ke_smazani)
                     supabase_query("hraci", method="DELETE", params={"id": f"eq.{h_obj['id']}"})
-                    st.success("Hráč vymazán.")
+                    st.success("Hráč úspěšně vymazán z ligy.")
                     st.rerun()
+            else:
+                st.info("V této lize zatím nejsou žádní hráči.")
 
             st.markdown("---")
             st.subheader(f"🗑️ Smazat zápas z ligy: {zvolena_liga_nazev}")
             zapasy_del = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
             if zapasy_del:
-                zapas_k_odstraneni = st.selectbox("Vyberte zápas ke smazání:", zapasy_del, format_func=lambda x: f"ID {x['id']} ({x['datum']}): {x['vitez1']} + {x['vitez2']}")
+                zapas_k_odstraneni = st.selectbox("Vyberte zápas ke smazání:", zapasy_del, format_func=lambda x: f"ID {x['id']} ({x['datum']}): {x['vitez1']} + {x['vitez2']} v {x['vysledek']}")
                 if st.button("❌ Smazat zápas"):
                     z_id = zapas_k_odstraneni['id']
                     v1 = zapas_k_odstraneni['vitez1']
@@ -247,7 +270,7 @@ if volba == "⚙️ Administrace":
                     if h2_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h2_obj["body"] - o_body)}, params={"id": f"eq.{h2_obj['id']}"})
                     
                     supabase_query("zapasy", method="DELETE", params={"id": f"eq.{z_id}"})
-                    st.success("Zápas smazán a body odečteny.")
+                    st.success("Zápas byl úspěšně smazán a body byly odečteny.")
                     st.rerun()
     elif heslo != "":
         st.error("Nesprávné heslo!")
