@@ -211,25 +211,28 @@ if volba == "⚙️ Administrace":
         st.subheader("🗑️ Definitivně smazat CELOU ligu")
         st.error("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
         
-        vsechny_ligy_del = supabase_query("ligy")
-        if vsechny_ligy_del and isinstance(vsechny_ligy_del, list):
-            liga_k_odstraneni = st.selectbox(
+ # --- PODSEKCE B: NEVRATNÉ SMAZÁNÍ CELÉ LIGY ---
+        st.markdown("---")
+        st.subheader("🗑️ Definitivně smazat CELOU ligu")
+        st.error("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
+        
+        if list(vsechny_ligy.keys()):
+            liga_k_odstraneni_nazev = st.selectbox(
                 "Vyberte ligu, kterou chcete NAVŽDY smazat:", 
-                vsechny_ligy_del, 
-                format_func=lambda x: x.get("nazev"),
+                list(vsechny_ligy.keys()),
                 key="liga_del_select"
             )
             
             potvrzeni_smazani = st.checkbox(
-                f"Potvrzuji, že chci nevratně smazat ligu: {liga_k_odstraneni.get('nazev')}", 
+                f"Potvrzuji, že chci nevratně smazat ligu: {liga_k_odstraneni_nazev}", 
                 key="liga_del_check"
             )
             
             if st.button("🔥 NEVRATNĚ SMAZAT LIGU I S DATY"):
                 if potvrzeni_smazani:
-                    l_del_id = liga_k_odstraneni.get("id")
+                    l_del_id = vsechny_ligy[liga_k_odstraneni_nazev]["id"]
                     supabase_query("ligy", method="DELETE", params={"id": f"eq.{l_del_id}"})
-                    st.success(f"Liga '{liga_k_odstraneni.get('nazev')}' byla úspěšně smazána.")
+                    st.success("Liga byla úspěšně smazána.")
                     st.rerun()
                 else:
                     st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
