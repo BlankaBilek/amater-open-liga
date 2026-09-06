@@ -235,10 +235,11 @@ if volba == "⚙️ Administrace":
             # --- PODSEKCE C: ÚPRAVA LIGY ---
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
             l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-            l_curr_item = l_curr if isinstance(l_curr, list) and l_curr else l_curr
-            p_text = l_curr_item.get("pravidla") if l_curr_item else ""
-            p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
-            p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
+            l_curr_item = l_curr if (l_curr and len(l_curr) > 0) else None
+
+            p_text = l_curr_item.get("pravidla") if isinstance(l_curr_item, dict) else ""
+            p_od_str = l_curr_item.get("od_datum") if isinstance(l_curr_item, dict) else ""
+            p_do_str = l_curr_item.get("do_datum") if isinstance(l_curr_item, dict) else ""
             
             p_od = datetime.strptime(p_od_str, "%d.%m.%Y").date() if p_od_str else datetime.now().date()
             p_do = datetime.strptime(p_do_str, "%d.%m.%Y").date() if p_do_str else datetime.now().date()
