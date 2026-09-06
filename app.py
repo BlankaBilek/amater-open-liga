@@ -273,3 +273,59 @@ if volba == "⚙️ Administrace":
                     st.rerun()
     elif heslo != "":
         st.error("Nesprávné heslo!")
+ st.markdown("---")
+            # --- NOVÁ PODSEKCE: SMAZÁNÍ CELÉ LIGY ---
+            st.subheader("🗑️ Definitivně smazat CELOU ligu")
+            st.warning("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
+            
+            # Načteme znovu aktuální seznam lig pro výběr ke smazání
+            ligy_pro_smazani = supabase_query("ligy")
+            if ligy_pro_smazani:
+                liga_k_odstraneni = st.selectbox(
+                    "Vyberte ligu, kterou chcete NAVŽDY smazat:", 
+                    ligy_pro_smazani, 
+                    format_func=lambda x: x.get("nazev"),
+                    key="liga_del_select"
+                )
+                
+                potvrzeni_smazani = st.checkbox(
+                    f"Potvrzuji, že chci nevratně smazat ligu: {liga_k_odstraneni.get('nazev')}", 
+                    key="liga_del_check"
+                )
+                
+                if st.button("🔥 NEVRATNĚ SMAZAT LIGU I S DATY"):
+                    if potvrzeni_smazani:
+                        l_del_id = liga_k_odstraneni.get("id")
+                        
+                        # Supabase má nastavené kaskádové mazání (ON DELETE CASCADE),
+                        # takže smazáním ligy se automaticky smažou i její hráči a zápasy.
+                        supabase_query("ligy", method="DELETE", params={"id": f"eq.{l_del_id}"})
+                        st.success(f"Liga '{liga_k_odstraneni.get('nazev')}' byla úspěšně vymazána z databáze.")
+                        st.rerun()
+                    else:
+                        st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
+
+            st.markdown("---")
+            # --- PODSEKCE D: MAZÁNÍ CHYBNÝCH ZÁPASŮ ---
+            st.subheader(f"🗑️ Smazat zápas z ligy: {zvolena_liga_nazev}")
+            zapasy_del = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
+            if zapasy_del:
+                zapas_k_odstraneni = st.selectbox("Vyberte zápas ke smazání:", zapasy_del, format_func=lambda x: f"ID {x['id']} ({x['datum']}): {x['vitez1']} + {x['vitez2']} v {x['vysledek']}")
+                if st.button("❌ Smazat zápas"):
+                    z_id = zapas_k_odstraneni['id']
+                    v1 = zapas_k_odstraneni['vitez1']
+                    v2 = zapas_k_odstraneni['vitez2']
+                    o_body = zapas_k_odstraneni['body_za_zapas']
+                    
+                    hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}"})
+                    h1_obj = next((h for h in hraci_list if h["jmeno"] == v1), None)
+                    h2_obj = next((h for h in hraci_list if h["jmeno"] == v2), None)
+                    
+                    if h1_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h1_obj["body"] - o_body)}, params={"id": f"eq.{h1_obj['id']}"})
+                    if h2_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h2_obj["body"] - o_body)}, params={"id": f"eq.{h2_obj['id']}"})
+                    
+                    supabase_query("zapasy", method="DELETE", params={"id": f"eq.{z_id}"})
+                    st.success("Zápas byl úspěšně smazán a body byly odečteny.")
+                    st.rerun()
+    elif heslo != "":
+        st.error("Nesprávné heslo!")
