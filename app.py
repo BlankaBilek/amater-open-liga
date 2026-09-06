@@ -29,7 +29,7 @@ def supabase_query(table, method="GET", json_data=None, params=None):
             elif method == "DELETE": response = client.delete(url, headers=headers, params=params)
             
             # --- ZDE JE 100% OPRAVA SYNTAXE ---
-            if response.status_code in:
+            if response.status_code in [200,201]:
                 data = response.json()
                 return [data] if isinstance(data, dict) else data
             return []
