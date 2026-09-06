@@ -136,7 +136,8 @@ else:
             if od_d and do_d:
                 st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
             st.markdown(pravidla_text if pravidla_text else "Žádný text pravidel.")
-            if volba == "⚙️ Administrace":
+    # --- 4. ADMINISTRACE ---
+if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
     heslo = st.text_input("Zadejte administrátorské heslo", type="password")
     if heslo == "karanymaster":
