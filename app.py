@@ -35,7 +35,7 @@ def supabase_query(table, method="GET", json_data=None, params=None):
                 response = client.delete(url, headers=headers, params=params)
             
             # 100% KONTROLA ÚSPĚŠNÝCH KÓDŮ
-            if response.status_code in:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 if isinstance(data, dict):
                     return [data]
