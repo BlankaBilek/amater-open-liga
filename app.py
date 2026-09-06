@@ -34,8 +34,8 @@ def supabase_query(table, method="GET", json_data=None, params=None):
             elif method == "DELETE":
                 response = client.delete(url, headers=headers, params=params)
             
-            # 100% OPRAVA: Kontrola úspěšných kódů (200 OK, 201 Created) bez chyb syntaxe
-            if response.status_code in [200, 201]:
+            # 100% KONTROLA ÚSPĚŠNÝCH KÓDŮ
+            if response.status_code in:
                 data = response.json()
                 if isinstance(data, dict):
                     return [data]
@@ -173,7 +173,7 @@ else:
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
         l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
         if l_info:
-            liga_item = l_info[0] if isinstance(l_info, list) else l_info
+            liga_item = l_info if isinstance(l_info, list) else l_info
             pravidla_text = liga_item.get("pravidla")
             od_d = liga_item.get("od_datum")
             do_d = liga_item.get("do_datum")
@@ -183,12 +183,14 @@ else:
 
 # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
+    st.sidebar.markdown("---")
     st.header("Sekce pro správce ligy")
     heslo = st.text_input("Zadejte administrátorské heslo", type="password")
     
     if heslo == "karanymaster":
         st.success("Přístup povolen!")
         
+        # --- PODSEKCE A: VYTVOŘENÍ LIGY ---
         st.subheader("🗂️ Vytvořit NOVOU ligu s termínem")
         nova_liga_nazev = st.text_input("Název nové ligy")
         c_od, c_do = st.columns(2)
@@ -204,11 +206,39 @@ if volba == "⚙️ Administrace":
                 st.success(f"Liga '{nova_liga_nazev}' byla úspěšně vytvořena!")
                 st.rerun()
 
-        if liga_id is not None:
+        # --- PODSEKCE B: NEVRATNÉ SMAZÁNÍ CELÉ LIGY ---
+        st.markdown("---")
+        st.subheader("🗑️ Definitivně smazat CELOU ligu")
+        st.error("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
+        
+        vsechny_ligy_del = supabase_query("ligy")
+        if vsechny_ligy_del and isinstance(vsechny_ligy_del, list):
+            liga_k_odstraneni = st.selectbox(
+                "Vyberte ligu, kterou chcete NAVŽDY smazat:", 
+                vsechny_ligy_del, 
+                format_func=lambda x: x.get("nazev"),
+                key="liga_del_select"
+            )
+            
+            potvrzeni_smazani = st.checkbox(
+                f"Potvrzuji, že chci nevratně smazat ligu: {liga_k_odstraneni.get('nazev')}", 
+                key="liga_del_check"
+            )
+            
+            if st.button("🔥 NEVRATNĚ SMAZAT LIGU I S DATY"):
+                if potvrzeni_smazani:
+                    l_del_id = liga_k_odstraneni.get("id")
+                    supabase_query("ligy", method="DELETE", params={"id": f"eq.{l_del_id}"})
+                    st.success(f"Liga '{liga_k_odstraneni.get('nazev')}' byla úspěšně smazána.")
+                    st.rerun()
+                else:
+                    st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
+if liga_id is not None:
             st.markdown("---")
+            # --- PODSEKCE C: ÚPRAVA LIGY ---
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
             l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-            l_curr_item = l_curr[0] if isinstance(l_curr, list) and l_curr else l_curr
+            l_curr_item = l_curr if isinstance(l_curr, list) and l_curr else l_curr
             p_text = l_curr_item.get("pravidla") if l_curr_item else ""
             p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
             p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
@@ -229,15 +259,17 @@ if volba == "⚙️ Administrace":
                 st.rerun()
 
             st.markdown("---")
+            # --- PODSEKCE D: PŘIDÁNÍ HRÁČE ---
             st.subheader(f"➕ Registrace nového hráče do: {zvolena_liga_nazev}")
             nove_jmeno = st.text_input("Jméno a příjmení hráče")
             if st.button("Zaregistrovat hráče"):
                 if nove_jmeno.strip() != "":
                     supabase_query("hraci", method="POST", json_data={"liga_id": liga_id, "jmeno": nove_jmeno.strip(), "body": 1.0})
-                    st.success("Hráč úspěšně přidán do ligy!")
+                    st.success("Hráč úspěšně přidán do ligu!")
                     st.rerun()
 
             st.markdown("---")
+            # --- PODSEKCE E: SMAZÁNÍ HRÁČE ---
             st.subheader(f"❌ Smazat hráče z ligy: {zvolena_liga_nazev}")
             hraci_del = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "jmeno.asc"})
             if hraci_del:
@@ -251,62 +283,7 @@ if volba == "⚙️ Administrace":
                 st.info("V této lize zatím nejsou žádní hráči.")
 
             st.markdown("---")
-            st.subheader(f"🗑️ Smazat zápas z ligy: {zvolena_liga_nazev}")
-            zapasy_del = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
-            if zapasy_del:
-                zapas_k_odstraneni = st.selectbox("Vyberte zápas ke smazání:", zapasy_del, format_func=lambda x: f"ID {x['id']} ({x['datum']}): {x['vitez1']} + {x['vitez2']} v {x['vysledek']}")
-                if st.button("❌ Smazat zápas"):
-                    z_id = zapas_k_odstraneni['id']
-                    v1 = zapas_k_odstraneni['vitez1']
-                    v2 = zapas_k_odstraneni['vitez2']
-                    o_body = zapas_k_odstraneni['body_za_zapas']
-                    
-                    hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}"})
-                    h1_obj = next((h for h in hraci_list if h["jmeno"] == v1), None)
-                    h2_obj = next((h for h in hraci_list if h["jmeno"] == v2), None)
-                    
-                    if h1_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h1_obj["body"] - o_body)}, params={"id": f"eq.{h1_obj['id']}"})
-                    if h2_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h2_obj["body"] - o_body)}, params={"id": f"eq.{h2_obj['id']}"})
-                    
-                    supabase_query("zapasy", method="DELETE", params={"id": f"eq.{z_id}"})
-                    st.success("Zápas byl úspěšně smazán a body byly odečteny.")
-                    st.rerun()
-    elif heslo != "":
-        st.error("Nesprávné heslo!")
- st.markdown("---")
-            # --- NOVÁ PODSEKCE: SMAZÁNÍ CELÉ LIGY ---
-            st.subheader("🗑️ Definitivně smazat CELOU ligu")
-            st.warning("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
-            
-            # Načteme znovu aktuální seznam lig pro výběr ke smazání
-            ligy_pro_smazani = supabase_query("ligy")
-            if ligy_pro_smazani:
-                liga_k_odstraneni = st.selectbox(
-                    "Vyberte ligu, kterou chcete NAVŽDY smazat:", 
-                    ligy_pro_smazani, 
-                    format_func=lambda x: x.get("nazev"),
-                    key="liga_del_select"
-                )
-                
-                potvrzeni_smazani = st.checkbox(
-                    f"Potvrzuji, že chci nevratně smazat ligu: {liga_k_odstraneni.get('nazev')}", 
-                    key="liga_del_check"
-                )
-                
-                if st.button("🔥 NEVRATNĚ SMAZAT LIGU I S DATY"):
-                    if potvrzeni_smazani:
-                        l_del_id = liga_k_odstraneni.get("id")
-                        
-                        # Supabase má nastavené kaskádové mazání (ON DELETE CASCADE),
-                        # takže smazáním ligy se automaticky smažou i její hráči a zápasy.
-                        supabase_query("ligy", method="DELETE", params={"id": f"eq.{l_del_id}"})
-                        st.success(f"Liga '{liga_k_odstraneni.get('nazev')}' byla úspěšně vymazána z databáze.")
-                        st.rerun()
-                    else:
-                        st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
-
-            st.markdown("---")
-            # --- PODSEKCE D: MAZÁNÍ CHYBNÝCH ZÁPASŮ ---
+            # --- PODSEKCE F: MAZÁNÍ ZÁPASŮ ---
             st.subheader(f"🗑️ Smazat zápas z ligy: {zvolena_liga_nazev}")
             zapasy_del = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
             if zapasy_del:
