@@ -17,7 +17,7 @@ headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
-    "Prefer": "return=representation"
+    "Prefer": "return=representation"  # Důležité: Donutí Supabase vrátit data zpět
 }
 
 # --- FUNKCE PRO KOMUNIKACI S DATABÁZÍ ---
@@ -34,7 +34,7 @@ def supabase_query(table, method="GET", json_data=None, params=None):
             elif method == "DELETE":
                 response = client.delete(url, headers=headers, params=params)
             
-            # --- ZDE BYLA CHYBA: NYNÍ 100% OPRAVENO A KONTROLUJE KÓDY 200 A 201 ---
+            # 100% OPRAVA: Kontrola úspěšných kódů (200 OK, 201 Created) bez chyb syntaxe
             if response.status_code in [200, 201]:
                 data = response.json()
                 if isinstance(data, dict):
@@ -173,7 +173,7 @@ else:
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
         l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
         if l_info:
-            liga_item = l_info if isinstance(l_info, list) else l_info
+            liga_item = l_info[0] if isinstance(l_info, list) else l_info
             pravidla_text = liga_item.get("pravidla")
             od_d = liga_item.get("od_datum")
             do_d = liga_item.get("do_datum")
@@ -208,7 +208,7 @@ if volba == "⚙️ Administrace":
             st.markdown("---")
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
             l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-            l_curr_item = l_curr if isinstance(l_curr, list) and l_curr else l_curr
+            l_curr_item = l_curr[0] if isinstance(l_curr, list) and l_curr else l_curr
             p_text = l_curr_item.get("pravidla") if l_curr_item else ""
             p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
             p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
