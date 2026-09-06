@@ -231,31 +231,31 @@ if volba == "⚙️ Administrace":
                 else:
                     st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
         if liga_id is not None:
-        st.markdown("---")
-        # --- PODSEKCE C: ÚPRAVA LIGY ---
-        st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
-        l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
-        l_curr_item = l_curr if isinstance(l_curr, list) and l_curr else l_curr
-        p_text = l_curr_item.get("pravidla") if l_curr_item else ""
-        p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
-        p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
+            st.markdown("---")
+            # --- PODSEKCE C: ÚPRAVA LIGY ---
+            st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
+            l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
+            l_curr_item = l_curr if isinstance(l_curr, list) and l_curr else l_curr
+            p_text = l_curr_item.get("pravidla") if l_curr_item else ""
+            p_od_str = l_curr_item.get("od_datum") if l_curr_item else ""
+            p_do_str = l_curr_item.get("do_datum") if l_curr_item else ""
             
-        p_od = datetime.strptime(p_od_str, "%d.%m.%Y").date() if p_od_str else datetime.now().date()
-        p_do = datetime.strptime(p_do_str, "%d.%m.%Y").date() if p_do_str else datetime.now().date()
+            p_od = datetime.strptime(p_od_str, "%d.%m.%Y").date() if p_od_str else datetime.now().date()
+            p_do = datetime.strptime(p_do_str, "%d.%m.%Y").date() if p_do_str else datetime.now().date()
             
-        c_u1, c_u2 = st.columns(2)
-        with c_u1: u_od = st.date_input("Změnit datum zahájení", p_od)
-        with c_u2: u_do = st.date_input("Změnit datum ukončení", p_do)
+            c_u1, c_u2 = st.columns(2)
+            with c_u1: u_od = st.date_input("Změnit datum zahájení", p_od)
+            with c_u2: u_do = st.date_input("Změnit datum ukončení", p_do)
                 
-        novy_text_pravidel = st.text_area("Text pravidel ligy (můžete používat i formátování)", p_text, height=200)
-        if st.button("Uložit změny ligy"):
-            str_u_od = u_od.strftime('%d.%m.%Y')
-            str_u_do = u_do.strftime('%d.%m.%Y')
-            supabase_query("ligy", method="PATCH", json_data={"pravidla": novy_text_pravidel, "od_datum": str_u_od, "do_datum": str_u_do}, params={"id": f"eq.{liga_id}"})
-            st.success("Změny ligy byly úspěšně uloženy!")
-            st.rerun()
+            novy_text_pravidel = st.text_area("Text pravidel ligy (můžete používat i formátování)", p_text, height=200)
+            if st.button("Uložit změny ligy"):
+                str_u_od = u_od.strftime('%d.%m.%Y')
+                str_u_do = u_do.strftime('%d.%m.%Y')
+                supabase_query("ligy", method="PATCH", json_data={"pravidla": novy_text_pravidel, "od_datum": str_u_od, "do_datum": str_u_do}, params={"id": f"eq.{liga_id}"})
+                st.success("Změny ligy byly úspěšně uloženy!")
+                st.rerun()
 
-        st.markdown("---")
+            st.markdown("---")
             # --- PODSEKCE D: PŘIDÁNÍ HRÁČE ---
             st.subheader(f"➕ Registrace nového hráče do: {zvolena_liga_nazev}")
             nove_jmeno = st.text_input("Jméno a příjmení hráče")
@@ -303,4 +303,4 @@ if volba == "⚙️ Administrace":
                     st.rerun()
     elif heslo != "":
         st.error("Nesprávné heslo!")
-                    
+       
