@@ -17,7 +17,7 @@ headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
-    "Prefer": "return=representation"  # Důležité: Donutí Supabase vrátit data zpět
+    "Prefer": "return=representation"
 }
 
 # --- FUNKCE PRO KOMUNIKACI S DATABÁZÍ ---
@@ -34,8 +34,7 @@ def supabase_query(table, method="GET", json_data=None, params=None):
             elif method == "DELETE":
                 response = client.delete(url, headers=headers, params=params)
             
-            # 100% KONTROLA ÚSPĚŠNÝCH KÓDŮ
-            if response.status_code in [200, 201]:
+            if response.status_code in:
                 data = response.json()
                 if isinstance(data, dict):
                     return [data]
@@ -61,8 +60,8 @@ if ligy_data and isinstance(ligy_data, list):
             try:
                 d_od = datetime.strptime(od_d, "%d.%m.%Y").date()
                 d_do = datetime.strptime(do_d, "%d.%m.%Y").date()
-                if dnes < d_od: stav = "[NEZAČALA]"
-                elif dnes > d_do: stav = "[UKONČENÁ]"
+                if d_od and dnes < d_od: stav = "[NEZAČALA]"
+                elif d_do and dnes > d_do: stav = "[UKONČENÁ]"
             except ValueError:
                 pass
         zobrazeny_nazev = f"{nazev} {stav}"
@@ -111,7 +110,7 @@ else:
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
         else:
             st.info("Zatím žádné zápasy.")
-  # --- 2. ZÁPIS VÝSLEDKŮ ---
+             # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]":
@@ -211,11 +210,6 @@ if volba == "⚙️ Administrace":
         st.subheader("🗑️ Definitivně smazat CELOU ligu")
         st.error("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
         
- # --- PODSEKCE B: NEVRATNÉ SMAZÁNÍ CELÉ LIGY ---
-        st.markdown("---")
-        st.subheader("🗑️ Definitivně smazat CELOU ligu")
-        st.error("⚠️ Pozor: Smazáním ligy trvale odstraníte její název, pravidla, všechny registrované hráče i odehrané zápasy!")
-        
         if list(vsechny_ligy.keys()):
             liga_k_odstraneni_nazev = st.selectbox(
                 "Vyberte ligu, kterou chcete NAVŽDY smazat:", 
@@ -236,7 +230,7 @@ if volba == "⚙️ Administrace":
                     st.rerun()
                 else:
                     st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
-                    if liga_id is not None:
+                     if liga_id is not None:
             st.markdown("---")
             # --- PODSEKCE C: ÚPRAVA LIGY ---
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
@@ -309,3 +303,4 @@ if volba == "⚙️ Administrace":
                     st.rerun()
     elif heslo != "":
         st.error("Nesprávné heslo!")
+                    
