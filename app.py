@@ -91,14 +91,17 @@ else:
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
         else: st.info("Zatím žádné zápasy.")
 
+      # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]": st.error("❌ Tato liga již byla oficiálně ukončena.")
         elif liga_stav == "[NEZAČALA]": st.warning("⏳ Tato liga ještě nezačala.")
         else:
             hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "jmeno.asc"})
-            seznam_hracu = [h["jmeno"] for h in hraci_list] if hraci_list else []
-            if len(seznam_hracu) < 4: st.warning("Musíte mít alespoň 4 hráče.")
+            # Přidáme prázdnou výchozí volbu na začátek seznamu hráčů
+            seznam_hracu = ["-- Vyberte hráče --"] + ([h["jmeno"] for h in hraci_list] if hraci_list else [])
+            
+            if len(seznam_hracu) < 5: st.warning("Musíte mít v lize alespoň 4 hráče pro zápis deblu.")
             else:
                 col1, col2 = st.columns(2)
                 with col1:
@@ -107,11 +110,17 @@ else:
                 with col2:
                     p1 = st.selectbox("Poražený 1", seznam_hracu, key="p1")
                     p2 = st.selectbox("Poražený 2", seznam_hracu, key="p2")
-                vysledek = st.text_input("Výsledek")
+                vysledek = st.text_input("Výsledek (např. 6:4, 6:3)")
                 datum_zapasu = st.date_input("Datum", datetime.now())
 
                 if st.button("Uložit zápas"):
-                    if len({v1, v2, p1, p2}) < 4: st.error("Hráči musí být rozdílní!")
+                    # KONTROLA: Zapomněl uživatel vybrat některého hráče?
+                    if "-- Vyberte hráče --" in [v1, v2, p1, p2]:
+                        st.error("Chyba: Musíte vybrat všechny 4 hráče!")
+                    elif len({v1, v2, p1, p2}) < 4: 
+                        st.error("Chyba: Všichni vybraní hráči musí být rozdílní!")
+                    elif vysledek.strip() == "":
+                        st.error("Chyba: Musíte vyplnit výsledek zápasu!")
                     else:
                         bp1 = next((h["body"] for h in hraci_list if h["jmeno"] == p1), 1.0)
                         bp2 = next((h["body"] for h in hraci_list if h["jmeno"] == p2), 1.0)
@@ -124,18 +133,17 @@ else:
                         st.success("Zápas úspěšně uložen!")
                         st.rerun()
 
+    # --- 3. PRAVIDLA LIGY ---
     elif volba == "📜 Pravidla ligy":
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
         l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
         if l_info:
             liga_item = l_info[0] if isinstance(l_info, list) and len(l_info) > 0 else l_info
-            # --- TADY JE OPRAVENÉ OBSAHUJE OCHRANU PŘED PÁDEM ---
             pravidla_text = liga_item.get("pravidla") if isinstance(liga_item, dict) else ""
             od_d = liga_item.get("od_datum") if isinstance(liga_item, dict) else ""
             do_d = liga_item.get("do_datum") if isinstance(liga_item, dict) else ""
             if od_d and do_d:
                 st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
-            st.markdown(pravidla_text if pravidla_text else "Žádný text pravidel.")
     # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
