@@ -111,7 +111,7 @@ else:
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
         else:
             st.info("Zatím žádné zápasy.")
- # --- 2. ZÁPIS VÝSLEDKŮ ---
+  # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]":
@@ -233,7 +233,7 @@ if volba == "⚙️ Administrace":
                     st.rerun()
                 else:
                     st.error("Chyba: Pro smazání musíte nejdříve zaškrtnout potvrzovací políčko výše!")
-if liga_id is not None:
+                    if liga_id is not None:
             st.markdown("---")
             # --- PODSEKCE C: ÚPRAVA LIGY ---
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
@@ -265,7 +265,7 @@ if liga_id is not None:
             if st.button("Zaregistrovat hráče"):
                 if nove_jmeno.strip() != "":
                     supabase_query("hraci", method="POST", json_data={"liga_id": liga_id, "jmeno": nove_jmeno.strip(), "body": 1.0})
-                    st.success("Hráč úspěšně přidán do ligu!")
+                    st.success("Hráč úspěšně přidán do ligy!")
                     st.rerun()
 
             st.markdown("---")
