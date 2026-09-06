@@ -6,29 +6,49 @@ from datetime import datetime
 
 st.set_page_config(page_title="Amatér Open Liga", page_icon="🎾", layout="wide")
 
-# --- DATABÁZE ---
-conn = sqlite3.connect("tenis_liga_v3.db", check_same_thread=False)
-cursor = conn.cursor()
+# --- NAČTENÍ PŘÍSTUPŮ K SUPABASE ZE STREAMLIT SECRETS ---
+if "supabase_url" in st.secrets and "supabase_key" in st.secrets:
+    SUPABASE_URL = st.secrets["supabase_url"]
+    SUPABASE_KEY = st.secrets["supabase_key"]
+else:
+    st.error("Chyba: V nastavení Streamlit Cloud chybí přístupové údaje (Secrets) k databázi Supabase!")
+    st.stop()
 
-cursor.execute("CREATE TABLE IF NOT EXISTS ligy (id INTEGER PRIMARY KEY AUTOINCREMENT, nazev TEXT UNIQUE, pravidla TEXT, od_datum TEXT, do_datum TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS hraci (id INTEGER PRIMARY KEY AUTOINCREMENT, liga_id INTEGER, jmeno TEXT, body REAL DEFAULT 1.0, UNIQUE(liga_id, jmeno))")
-cursor.execute("CREATE TABLE IF NOT EXISTS zapasy (id INTEGER PRIMARY KEY AUTOINCREMENT, liga_id INTEGER, datum TEXT, vitez1 TEXT, vitez2 TEXT, porazeny1 TEXT, porazeny2 TEXT, vysledek TEXT, body_za_zapas REAL)")
-conn.commit()
+headers = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
 
-try:
-    cursor.execute("ALTER TABLE ligy ADD COLUMN od_datum TEXT")
-    cursor.execute("ALTER TABLE ligy ADD COLUMN do_datum TEXT")
-    conn.commit()
-except sqlite3.OperationalError:
-    pass
+# --- FUNKCE PRO KOMUNIKACI S DATABÁZÍ ---
+def supabase_query(table, method="GET", json_data=None, params=None):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    try:
+        with httpx.Client() as client:
+            if method == "GET":
+                response = client.get(url, headers=headers, params=params)
+            elif method == "POST":
+                response = client.post(url, headers=headers, json=json_data)
+            elif method == "PATCH":
+                response = client.patch(url, headers=headers, json=json_data, params=params)
+            elif method == "DELETE":
+                response = client.delete(url, headers=headers, params=params)
+            return response.json() if response.status_code in [200, 201] else []
+    except Exception:
+        return []
 
-cursor.execute("SELECT id, nazev, od_datum, do_datum FROM ligy")
-ligy_z_db = cursor.fetchall()
-
+# Načtení seznamu lig
+ligy_data = supabase_query("ligy")
 vsechny_ligy = {}
 dnes = datetime.now().date()
 
-for l_id, nazev, od_d, do_d in ligy_z_db:
+for l in ligy_data:
+    l_id = l.get("id")
+    nazev = l.get("nazev")
+    od_d = l.get("od_datum")
+    do_d = l.get("do_datum")
+    
     stav = "[AKTIVNÍ]"
     if od_d and do_d:
         try:
@@ -41,6 +61,7 @@ for l_id, nazev, od_d, do_d in ligy_z_db:
     zobrazeny_nazev = f"{nazev} {stav}"
     vsechny_ligy[zobrazeny_nazev] = {"id": l_id, "nazev_puvodni": nazev, "stav": stav}
 
+# --- NAVIGACE A VÝBĚR LIGY ---
 st.sidebar.title("🎾 Nastavení ligy")
 
 if list(vsechny_ligy.keys()):
@@ -63,19 +84,27 @@ st.subheader(f"Soutěž: {zvolena_liga_nazev} {liga_stav}")
 if liga_id is None:
     st.warning("V systému není žádná aktivní liga. Přejděte do Administrace.")
 else:
+    # --- 1. ŽEBŘÍČEK ---
     if volba == "📊 Žebříček ligy":
         st.header("Aktuální pořadí hráčů")
-        df_hraci = pd.read_sql_query("SELECT jmeno as 'Hráč', body as 'Body' FROM hraci WHERE liga_id = ? ORDER BY body DESC", conn, params=(liga_id,))
-        df_hraci.index = df_hraci.index + 1
-        st.table(df_hraci)
+        hraci_data = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "body.desc"})
+        if hraci_data:
+            df_hraci = pd.DataFrame(hraci_data)[["jmeno", "body"]]
+            df_hraci.columns = ["Hráč", "Body"]
+            df_hraci.index = df_hraci.index + 1
+            st.table(df_hraci)
+        else:
+            st.info("V této lize zatím nejsou žádní hráči.")
         
         st.subheader("Historie odehraných zápasů")
-        df_zapasy = pd.read_sql_query("SELECT id as 'ID', datum as 'Datum', vitez1 as 'Vítěz 1', vitez2 as 'Vítěz 2', porazeny1 as 'Poražený 1', porazeny2 as 'Poražený 2', vysledek as 'Výsledek', body_za_zapas as 'Body za zápas' FROM zapasy WHERE liga_id = ? ORDER BY id DESC", conn, params=(liga_id,))
-        if not df_zapasy.empty:
+        zapasy_data = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
+        if zapasy_data:
+            df_zapasy = pd.DataFrame(zapasy_data)[["id", "datum", "vitez1", "vitez2", "porazeny1", "porazeny2", "vysledek", "body_za_zapas"]]
+            df_zapasy.columns = ["ID", "Datum", "Vítěz 1", "Vítěz 2", "Poražený 1", "Poražený 2", "Výsledek", "Body za zápas"]
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
         else:
             st.info("Zatím žádné zápasy.")
-
+ # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]":
@@ -83,8 +112,8 @@ else:
         elif liga_stav == "[NEZAČALA]":
             st.warning("⏳ Tato liga ještě nezačala. Zápis výsledků bude povolen až po oficiálním datu zahájení.")
         else:
-            cursor.execute("SELECT jmeno FROM hraci WHERE liga_id = ? ORDER BY jmeno", (liga_id,))
-            seznam_hracu = [r[0] for r in cursor.fetchall()]
+            hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "jmeno.asc"})
+            seznam_hracu = [h["jmeno"] for h in hraci_list]
             
             if len(seznam_hracu) < 4:
                 st.warning("Musíte mít alespoň 4 hráče pro zápis deblu.")
@@ -103,30 +132,44 @@ else:
                     if len({v1, v2, p1, p2}) < 4:
                         st.error("Chyba: Hráči musí být rozdílní!")
                     else:
-                        cursor.execute("SELECT COUNT(*) FROM zapasy WHERE liga_id = ? AND ((vitez1 = ? AND vitez2 = ?) OR (vitez1 = ? AND vitez2 = ?)) AND ((porazeny1 = ? AND porazeny2 = ?) OR (porazeny1 = ? AND porazeny2 = ?))", (liga_id, v1, v2, v2, v1, p1, p2, p2, p1))
-                        if cursor.fetchone()[0] > 0:
+                        dup = supabase_query("zapasy", params={
+                            "liga_id": f"eq.{liga_id}",
+                            "vitez1": f"in.(\"{v1}\",\"{v2}\")",
+                            "vitez2": f"in.(\"{v1}\",\"{v2}\")",
+                            "porazeny1": f"in.(\"{p1}\",\"{p2}\")",
+                            "porazeny2": f"in.(\"{p1}\",\"{p2}\")"
+                        })
+                        if dup:
                             st.error("Chyba: Zápas ve stejném složení už existuje!")
                         else:
-                            cursor.execute("SELECT body FROM hraci WHERE liga_id = ? AND jmeno = ?", (liga_id, p1))
-                            bp1 = cursor.fetchone()[0]
-                            cursor.execute("SELECT body FROM hraci WHERE liga_id = ? AND jmeno = ?", (liga_id, p2))
-                            bp2 = cursor.fetchone()[0]
+                            bp1 = next((h["body"] for h in hraci_list if h["jmeno"] == p1), 1.0)
+                            bp2 = next((h["body"] for h in hraci_list if h["jmeno"] == p2), 1.0)
                             zisk = (bp1 + bp2) / 2
                             
-                            cursor.execute("INSERT INTO zapasy (liga_id, datum, vitez1, vitez2, porazeny1, porazeny2, vysledek, body_za_zapas) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (liga_id, datum_zapasu.strftime('%d.%m.%Y'), v1, v2, p1, p2, vysledek, zisk))
-                            cursor.execute("UPDATE hraci SET body = body + ? WHERE liga_id = ? AND jmeno = ?", (zisk, liga_id, v1))
-                            cursor.execute("UPDATE hraci SET body = body + ? WHERE liga_id = ? AND jmeno = ?", (zisk, liga_id, v2))
-                            conn.commit()
+                            novy_zapas = {
+                                "liga_id": liga_id, "datum": datum_zapasu.strftime('%d.%m.%Y'),
+                                "vitez1": v1, "vitez2": v2, "porazeny1": p1, "porazeny2": p2,
+                                "vysledek": vysledek, "body_za_zapas": zisk
+                            }
+                            supabase_query("zapasy", method="POST", json_data=novy_zapas)
+                            
+                            h1_obj = next(h for h in hraci_list if h["jmeno"] == v1)
+                            h2_obj = next(h for h in hraci_list if h["jmeno"] == v2)
+                            supabase_query("hraci", method="PATCH", json_data={"body": h1_obj["body"] + zisk}, params={"id": f"eq.{h1_obj['id']}"})
+                            supabase_query("hraci", method="PATCH", json_data={"body": h2_obj["body"] + zisk}, params={"id": f"eq.{h2_obj['id']}"})
+                            
                             st.success("Zápas úspěšně uložen!")
                             st.rerun()
+
     # --- 3. PRAVIDLA LIGY ---
     elif volba == "📜 Pravidla ligy":
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
-        cursor.execute("SELECT pravidla, od_datum, do_datum FROM ligy WHERE id = ?", (liga_id,))
-        liga_info = cursor.fetchone()
-        
-        if liga_info:
-            pravidla_text, od_d, do_d = liga_info
+        l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
+        if l_info and len(l_info) > 0:
+            liga_item = l_info[0]
+            pravidla_text = liga_item.get("pravidla")
+            od_d = liga_item.get("od_datum")
+            do_d = liga_item.get("do_datum")
             if od_d and do_d:
                 st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
             st.markdown(pravidla_text if pravidla_text else "Zatím nebyl zadán žádný text pravidel.")
@@ -140,50 +183,29 @@ if volba == "⚙️ Administrace":
         st.success("Přístup povolen!")
         
         st.subheader("🗂️ Vytvořit NOVOU ligu s termínem")
-        nova_liga_nazev = st.text_input("Název nové ligy (např. 'Káranská deblová liga - 2026')")
-        
+        nova_liga_nazev = st.text_input("Název nové ligy")
         c_od, c_do = st.columns(2)
-        with c_od:
-            nova_od = st.date_input("Datum zahájení", datetime.now())
-        with c_do:
-            nova_do = st.date_input("Datum ukončení", datetime.now())
+        with c_od: nova_od = st.date_input("Datum zahájení", datetime.now())
+        with c_do: nova_do = st.date_input("Datum ukončení", datetime.now())
             
         if st.button("Vytvořit ligu"):
             if nova_liga_nazev.strip() != "":
-                try:
-                    str_od = nova_od.strftime('%d.%m.%Y')
-                    str_do = nova_do.strftime('%d.%m.%Y')
-                    cursor.execute("INSERT INTO ligy (nazev, pravidla, od_datum, do_datum) VALUES (?, 'Zde doplňte pravidla této ligy.', ?, ?)", (nova_liga_nazev.strip(), str_od, str_do))
-                    conn.commit()
-                    st.success(f"Liga '{nova_liga_nazev}' byla úspěšně vytvořena!")
-                    st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error("Liga s tímto názvem již existuje!")
+                str_od = nova_od.strftime('%d.%m.%Y')
+                str_do = nova_do.strftime('%d.%m.%Y')
+                novaliga = {"nazev": nova_liga_nazev.strip(), "pravidla": "Zde doplňte pravidla.", "od_datum": str_od, "do_datum": str_do}
+                supabase_query("ligy", method="POST", json_data=novaliga)
+                st.success("Liga vytvořena!")
+                st.rerun()
 
         if liga_id is not None:
             st.markdown("---")
             st.subheader(f"📝 Upravit termín a pravidla ligy: {zvolena_liga_nazev}")
-            cursor.execute("SELECT pravidla, od_datum, do_datum FROM ligy WHERE id = ?", (liga_id,))
-            res_p = cursor.fetchone()
-            
-            p_text = res_p[0] if res_p and res_p[0] else ""
-            p_od = datetime.strptime(res_p[1], "%d.%m.%Y").date() if res_p and res_p[1] else datetime.now().date()
-            p_do = datetime.strptime(res_p[2], "%d.%m.%Y").date() if res_p and res_p[2] else datetime.now().date()
-            
-            c_u1, c_u2 = st.columns(2)
-            with c_u1:
-                u_od = st.date_input("Změnit datum zahájení", p_od)
-            with c_u2:
-                u_do = st.date_input("Změnit datum ukončení", p_do)
-                
-            novy_text_pravidel = st.text_area("Text pravidel ligy (můžete používat i formátování)", p_text, height=200)
-            
+            l_curr = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
+            p_text = l_curr[0].get("pravidla") if l_curr else ""
+            novy_text_pravidel = st.text_area("Text pravidel ligy", p_text, height=200)
             if st.button("Uložit změny ligy"):
-                str_u_od = u_od.strftime('%d.%m.%Y')
-                str_u_do = u_do.strftime('%d.%m.%Y')
-                cursor.execute("UPDATE ligy SET pravidla = ?, od_datum = ?, do_datum = ? WHERE id = ?", (novy_text_pravidel, str_u_od, str_u_do, liga_id))
-                conn.commit()
-                st.success("Změny ligy byly úspěšně uloženy!")
+                supabase_query("ligy", method="PATCH", json_data={"pravidla": novy_text_pravidel}, params={"id": f"eq.{liga_id}"})
+                st.success("Uloženo!")
                 st.rerun()
 
             st.markdown("---")
@@ -191,50 +213,41 @@ if volba == "⚙️ Administrace":
             nove_jmeno = st.text_input("Jméno a příjmení hráče")
             if st.button("Zaregistrovat hráče"):
                 if nove_jmeno.strip() != "":
-                    try:
-                        cursor.execute("INSERT INTO hraci (liga_id, jmeno, body) VALUES (?, ?, 1.0)", (liga_id, nove_jmeno.strip()))
-                        conn.commit()
-                        st.success(f"Hráč byl úspěšně přidán do ligy!")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Tento hráč již v této lize existuje!")
+                    supabase_query("hraci", method="POST", json_data={"liga_id": liga_id, "jmeno": nove_jmeno.strip(), "body": 1.0})
+                    st.success("Hráč přidán!")
+                    st.rerun()
 
             st.markdown("---")
-            # --- NOVÁ PODSEKCE: SMAZÁNÍ HRÁČE ---
             st.subheader(f"❌ Smazat hráče z ligy: {zvolena_liga_nazev}")
-            cursor.execute("SELECT jmeno FROM hraci WHERE liga_id = ? ORDER BY jmeno", (liga_id,))
-            seznam_smazani = [r[0] for r in cursor.fetchall()]
-            
-            if seznam_smazani:
-                hrac_ke_smazani = st.selectbox("Vyberte hráče, kterého chcete odstranit:", seznam_smazani)
-                if st.button("Definitivně smazat hráče z ligy"):
-                    cursor.execute("DELETE FROM hraci WHERE liga_id = ? AND jmeno = ?", (liga_id, hrac_ke_smazani))
-                    conn.commit()
-                    st.success(f"Hráč {hrac_ke_smazani} byl úspěšně vymazán z ligy.")
+            hraci_del = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "jmeno.asc"})
+            if hraci_del:
+                hrac_ke_smazani = st.selectbox("Vyberte hráče k odstranění:", [h["jmeno"] for h in hraci_del])
+                if st.button("Definitivně smazat hráče"):
+                    h_obj = next(h for h in hraci_del if h["jmeno"] == hrac_ke_smazani)
+                    supabase_query("hraci", method="DELETE", params={"id": f"eq.{h_obj['id']}"})
+                    st.success("Hráč vymazán.")
                     st.rerun()
-            else:
-                st.info("V této lize zatím nejsou žádní hráči.")
 
             st.markdown("---")
             st.subheader(f"🗑️ Smazat zápas z ligy: {zvolena_liga_nazev}")
-            cursor.execute("SELECT id, datum, vitez1, vitez2, vysledek FROM zapasy WHERE liga_id = ? ORDER BY id DESC", (liga_id,))
-            vsechny_zapasy = cursor.fetchall()
-            
-            if vsechny_zapasy:
-                zapas_k_odstraneni = st.selectbox(
-                    "Vyberte zápas ke smazání:", 
-                    vsechny_zapasy, 
-                    format_func=lambda x: f"ID {x[0]} (Datum: {x[1]}): {x[2]} + {x[3]} - Výsledek: {x[4]}"
-                )
+            zapasy_del = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
+            if zapasy_del:
+                zapas_k_odstraneni = st.selectbox("Vyberte zápas ke smazání:", zapasy_del, format_func=lambda x: f"ID {x['id']} ({x['datum']}): {x['vitez1']} + {x['vitez2']}")
                 if st.button("❌ Smazat zápas"):
-                    zapas_id = zapas_k_odstraneni[0]
-                    cursor.execute("SELECT vitez1, vitez2, body_za_zapas FROM zapasy WHERE id = ?", (zapas_id,))
-                    v1, v2, odecitane_body = cursor.fetchone()
-                    cursor.execute("UPDATE hraci SET body = body - ? WHERE liga_id = ? AND jmeno = ?", (odecitane_body, liga_id, v1))
-                    cursor.execute("UPDATE hraci SET body = body - ? WHERE liga_id = ? AND jmeno = ?", (odecitane_body, liga_id, v2))
-                    cursor.execute("DELETE FROM zapasy WHERE id = ?", (zapas_id,))
-                    conn.commit()
-                    st.success("Zápas byl smazán a body byly odečteny.")
+                    z_id = zapas_k_odstraneni['id']
+                    v1 = zapas_k_odstraneni['vitez1']
+                    v2 = zapas_k_odstraneni['vitez2']
+                    o_body = zapas_k_odstraneni['body_za_zapas']
+                    
+                    hraci_list = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}"})
+                    h1_obj = next((h for h in hraci_list if h["jmeno"] == v1), None)
+                    h2_obj = next((h for h in hraci_list if h["jmeno"] == v2), None)
+                    
+                    if h1_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h1_obj["body"] - o_body)}, params={"id": f"eq.{h1_obj['id']}"})
+                    if h2_obj: supabase_query("hraci", method="PATCH", json_data={"body": max(1.0, h2_obj["body"] - o_body)}, params={"id": f"eq.{h2_obj['id']}"})
+                    
+                    supabase_query("zapasy", method="DELETE", params={"id": f"eq.{z_id}"})
+                    st.success("Zápas smazán a body odečteny.")
                     st.rerun()
     elif heslo != "":
         st.error("Nesprávné heslo!")
