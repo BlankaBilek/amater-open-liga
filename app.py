@@ -34,8 +34,8 @@ def supabase_query(table, method="GET", json_data=None, params=None):
             elif method == "DELETE":
                 response = client.delete(url, headers=headers, params=params)
             
-            # KONTROLA: Úspěšné kódy 200 (OK) a 201 (Vytvořeno)
-            if response.status_code in:
+            # --- ZDE BYLA CHYBA: NYNÍ 100% OPRAVENO A KONTROLUJE KÓDY 200 A 201 ---
+            if response.status_code in [200, 201]:
                 data = response.json()
                 if isinstance(data, dict):
                     return [data]
@@ -89,7 +89,7 @@ st.title("🏆 Amatér Open Liga")
 st.subheader(f"Soutěž: {zvolena_liga_nazev} {liga_stav}")
 
 if liga_id is None and volba != "⚙️ Administrace":
-    st.warning("V systému není žádná active liga. Přejděte do Administrace a založte ji.")
+    st.warning("V systému není žádná aktivní liga. Přejděte do Administrace a založte ji.")
 else:
     # --- 1. ŽEBŘÍČEK ---
     if volba == "📊 Žebříček ligy":
@@ -179,7 +179,7 @@ else:
             do_d = liga_item.get("do_datum")
             if od_d and do_d:
                 st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
-            st.markdown(pravRules_text if pravidla_text else "Zatím nebyl zadán žádný text pravidel.")
+            st.markdown(pravidla_text if pravidla_text else "Zatím nebyl zadán žádný text pravidel.")
 
 # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
