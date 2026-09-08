@@ -150,7 +150,7 @@ else:
 if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
     heslo = st.text_input("Zadejte administrátorské heslo", type="password")
-    if heslo == "karanymaster":
+    if heslo == st.secrets["admin_password"]:
         st.success("Přístup povolen!")
         st.subheader("🗂️ Vytvořit NOVOU ligu")
         nova_liga_nazev = st.text_input("Název nové ligy")
