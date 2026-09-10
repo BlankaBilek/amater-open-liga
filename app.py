@@ -73,23 +73,34 @@ st.subheader(f"Soutěž: {zvolena_liga_nazev} {liga_stav}")
 if liga_id is None and volba != "⚙️ Administrace":
     st.warning("V systému není žádná aktivní liga. Založte ji v Administraci.")
 else:
+    # --- 1. ŽEBŘÍČEK ---
     if volba == "📊 Žebříček ligy":
         st.header("Aktuální pořadí hráčů")
         hraci_data = supabase_query("hraci", params={"liga_id": f"eq.{liga_id}", "order": "body.desc"})
         if hraci_data and isinstance(hraci_data, list) and len(hraci_data) > 0:
             df_hraci = pd.DataFrame(hraci_data)[["jmeno", "body"]]
             df_hraci.columns = ["Hráč", "Body"]
+            
+            # MATEMATICKÉ ZAOKROUHLENÍ NA CELÁ ČÍSLA (.round(0)) A PŘEVOD NA ČISTÉ ČÍSLO (.astype(int))
+            df_hraci["Body"] = df_hraci["Body"].round(0).astype(int)
+            
             df_hraci.index = df_hraci.index + 1
             st.table(df_hraci)
-        else: st.info("V této lize zatím nejsou žádní hráči.")
+        else:
+            st.info("V této lize zatím nejsou žádní hráči.")
         
         st.subheader("Historie odehraných zápasů")
         zapasy_data = supabase_query("zapasy", params={"liga_id": f"eq.{liga_id}", "order": "id.desc"})
         if zapasy_data and isinstance(zapasy_data, list) and len(zapasy_data) > 0:
             df_zapasy = pd.DataFrame(zapasy_data)[["id", "datum", "vitez1", "vitez2", "porazeny1", "porazeny2", "vysledek", "body_za_zapas"]]
             df_zapasy.columns = ["ID", "Datum", "Vítěz 1", "Vítěz 2", "Poražený 1", "Poražený 2", "Výsledek", "Body za zápas"]
+            
+            # ZAOKROUHLENÍ BODŮ ZA ZÁPAS V HISTORII NA CELÁ ČÍSLA
+            df_zapasy["Body za zápas"] = df_zapasy["Body za zápas"].round(0).astype(int)
+            
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
-        else: st.info("Zatím žádné zápasy.")
+        else:
+            st.info("Zatím žádné zápasy.")
 
         # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
