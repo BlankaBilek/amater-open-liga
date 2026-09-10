@@ -170,12 +170,16 @@ else:
         st.header(f"Podmínky a pravidla pro: {zvolena_liga_nazev}")
         l_info = supabase_query("ligy", params={"id": f"eq.{liga_id}"})
         if l_info:
-            liga_item = l_info[0] if isinstance(l_info, list) and len(l_info) > 0 else l_info
+            # Výběr prvního prvku ze seznamu dat pro zamezení pádu aplikace
+            liga_item = l_info[0] if (isinstance(l_info, list) and len(l_info) > 0) else (l_info if isinstance(l_info, dict) else None)
+            
             pravidla_text = liga_item.get("pravidla") if isinstance(liga_item, dict) else ""
             od_d = liga_item.get("od_datum") if isinstance(liga_item, dict) else ""
             do_d = liga_item.get("do_datum") if isinstance(liga_item, dict) else ""
-            if od_d and do_d:
+            
+            if od_d and do_d: 
                 st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
+            st.markdown(pravidla_text if pravidla_text else "Zatím nebyl zadán žádný text pravidel.")
     # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
