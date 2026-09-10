@@ -102,7 +102,7 @@ else:
         else:
             st.info("Zatím žádné zápasy.")
 
-        # --- 2. ZÁPIS VÝSLEDKŮ ---
+         # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]": st.error("❌ Tato liga již byla oficiálně ukončena.")
@@ -113,17 +113,21 @@ else:
             
             if len(seznam_hracu) < 5: st.warning("Musíte mít v lize alespoň 4 hráče pro zápis deblu.")
             else:
-                col1, col2 = st.columns(2)
-                with col1:
-                    v1 = st.selectbox("Vítěz 1", seznam_hracu, key="v1")
-                    v2 = st.selectbox("Vítěz 2", seznam_hracu, key="v2")
-                with col2:
-                    p1 = st.selectbox("Poražený 1", seznam_hracu, key="p1")
-                    p2 = st.selectbox("Poražený 2", seznam_hracu, key="p2")
-                vysledek = st.text_input("Výsledek (např. 6:4, 6:3)")
-                datum_zapasu = st.date_input("Datum", datetime.now())
+                # OCHRANA: Uzamkneme políčka do čistého formuláře, který se umí sám smazat
+                with st.form("zapas_form", clear_on_submit=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        v1 = st.selectbox("Vítěz 1", seznam_hracu, key="v1")
+                        v2 = st.selectbox("Vítěz 2", seznam_hracu, key="v2")
+                    with col2:
+                        p1 = st.selectbox("Poražený 1", seznam_hracu, key="p1")
+                        p2 = st.selectbox("Poražený 2", seznam_hracu, key="p2")
+                    vysledek = st.text_input("Výsledek (např. 6:4, 6:3)")
+                    datum_zapasu = st.date_input("Datum", datetime.now())
+                    
+                    ulozit = st.form_submit_button("Uložit zápas")
 
-                if st.button("Uložit zápas"):
+                if ulozit:
                     if "-- Vyberte hráče --" in [v1, v2, p1, p2]:
                         st.error("Chyba: Musíte vybrat všechny 4 hráče!")
                     elif len({v1, v2, p1, p2}) < 4: 
@@ -158,11 +162,6 @@ else:
                                 supabase_query("hraci", method="PATCH", json_data={"body": h1_obj["body"] + zisk}, params={"id": f"eq.{h1_obj['id']}"})
                                 supabase_query("hraci", method="PATCH", json_data={"body": h2_obj["body"] + zisk}, params={"id": f"eq.{h2_obj['id']}"})
                                 
-                                # --- VYMAZÁNÍ PAMĚTI FORMULÁŘE PŘED RESTARTEM STRÁNKY ---
-                                for k in ["v1", "v2", "p1", "p2"]:
-                                    if k in st.session_state:
-                                        del st.session_state[k]
-                                
                                 st.success("🎉 Zápas úspěšně uložen, body přičteny!")
                                 st.rerun()
 
@@ -176,7 +175,7 @@ else:
             od_d = liga_item.get("od_datum") if isinstance(liga_item, dict) else ""
             do_d = liga_item.get("do_datum") if isinstance(liga_item, dict) else ""
             if od_d and do_d: st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
-            st.markdown(pravidla_text if pravidla_text else "Žádný text pravidel.")
+            st.markdown(pravRules_text if pravidla_text else "Žádný text pravidel.")
     # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
