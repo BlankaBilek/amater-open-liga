@@ -175,12 +175,12 @@ else:
             od_d = liga_item.get("od_datum") if isinstance(liga_item, dict) else ""
             do_d = liga_item.get("do_datum") if isinstance(liga_item, dict) else ""
             if od_d and do_d: st.info(f"📅 **Období konání ligy:** od {od_d} do {do_d}")
-            st.markdown(pravRules_text if pravidla_text else "Žádný text pravidel.")
+            st.markdown(pravidla_text if pravidla_text else "Žádný text pravidel.")
     # --- 4. ADMINISTRACE ---
 if volba == "⚙️ Administrace":
     st.header("Sekce pro správce ligy")
     heslo = st.text_input("Zadejte administrátorské heslo", type="password")
-    if heslo == "karanymaster":
+    if heslo == st.secrets["admin_password"]:
         st.success("Přístup povolen!")
         
         # --- PODSEKCE A: VYTVOŘENÍ LIGY ---
