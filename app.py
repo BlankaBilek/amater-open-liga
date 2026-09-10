@@ -91,7 +91,7 @@ else:
             st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
         else: st.info("Zatím žádné zápasy.")
 
-       # --- 2. ZÁPIS VÝSLEDKŮ ---
+        # --- 2. ZÁPIS VÝSLEDKŮ ---
     elif volba == "📝 Zadat výsledek":
         st.header("Zápis odehraného zápasu")
         if liga_stav == "[UKONČENÁ]": st.error("❌ Tato liga již byla oficiálně ukončena.")
@@ -120,7 +120,6 @@ else:
                     elif vysledek.strip() == "":
                         st.error("Chyba: Musíte vyplnit výsledek zápasu!")
                     else:
-                        # 100% KONTROLA DUPLICITY PŘÍMO V SUPABASE
                         stat_dup = supabase_query("zapasy", params={
                             "liga_id": f"eq.{liga_id}",
                             "vitez1": f"eq.{v1}",
@@ -132,7 +131,6 @@ else:
                         if stat_dup and len(stat_dup) > 0:
                             st.error("❌ Tento zápas se stejným výsledkem a hráči již byl zapsán!")
                         else:
-                            # OCHRANA PROTI PROKLIKU: Spustíme načítací kolečko
                             with st.spinner("Ukládám zápas do cloudu..."):
                                 bp1 = next((h["body"] for h in hraci_list if h["jmeno"] == p1), 1.0)
                                 bp2 = next((h["body"] for h in hraci_list if h["jmeno"] == p2), 1.0)
@@ -148,6 +146,11 @@ else:
                                 h2_obj = next(h for h in hraci_list if h["jmeno"] == v2)
                                 supabase_query("hraci", method="PATCH", json_data={"body": h1_obj["body"] + zisk}, params={"id": f"eq.{h1_obj['id']}"})
                                 supabase_query("hraci", method="PATCH", json_data={"body": h2_obj["body"] + zisk}, params={"id": f"eq.{h2_obj['id']}"})
+                                
+                                # --- VYMAZÁNÍ PAMĚTI FORMULÁŘE PŘED RESTARTEM STRÁNKY ---
+                                for k in ["v1", "v2", "p1", "p2"]:
+                                    if k in st.session_state:
+                                        del st.session_state[k]
                                 
                                 st.success("🎉 Zápas úspěšně uložen, body přičteny!")
                                 st.rerun()
