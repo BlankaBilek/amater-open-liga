@@ -98,7 +98,8 @@ else:
             # ZAOKROUHLENÍ BODŮ ZA ZÁPAS V HISTORII NA CELÁ ČÍSLA
             df_zapasy["Body za zápas"] = df_zapasy["Body za zápas"].round(0).astype(int)
             
-            st.dataframe(df_zapasy, use_container_width=True, hide_index=True)
+            # OPRAVA VAROVÁNÍ: use_container_width=True nahrazeno moderním width="stretch"
+            st.dataframe(df_zapasy, width="stretch", hide_index=True)
         else:
             st.info("Zatím žádné zápasy.")
 
